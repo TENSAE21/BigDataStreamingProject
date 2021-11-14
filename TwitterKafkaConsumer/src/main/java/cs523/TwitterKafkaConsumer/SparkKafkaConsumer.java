@@ -1,25 +1,69 @@
 package main.java.cs523.TwitterKafkaConsumer;
 
 
+import java.net.URI;
 import java.util.*;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.*;
 import org.apache.spark.streaming.kafka010.*;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 
 public class SparkKafkaConsumer {
 	
-	static String SAVE_LOCATION = "output";
+	static String SAVE_LOCATION = "hdfs://localhost:8020/user/cloudera/TwitterOutput";
 	
 	public static void main(String[] args) throws Exception
 	{
-		// Create a Java Spark Context
+		
+		String hdfsuri = "hdfs://localhost:8020"; //54310
+		
+		Configuration conf = new Configuration();
+	      // Set FileSystem URI
+	      conf.set("fs.defaultFS", hdfsuri);
+	      // Because of Maven
+	      conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
+	      conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+	      // Set HADOOP user
+	      System.setProperty("HADOOP_USER_NAME", "cloudera");
+	      System.setProperty("HADOOP_PASSWORD", "cloudera");
+	      System.setProperty("hadoop.home.dir", "/");
+	      //Get the filesystem - HDFS
+	      FileSystem fs = FileSystem.get(URI.create(hdfsuri), conf);
 
+	      //==== Create folder if not exists
+	      Path workingDir=fs.getWorkingDirectory();
+	      Path newFolderPath= new Path(SAVE_LOCATION);
+	      if(!fs.exists(newFolderPath)) {
+	         // Create new Directory
+	         fs.mkdirs(newFolderPath);
+	         System.out.println("Path "+SAVE_LOCATION+" created.");
+	      }
+
+	      //==== Write file
+	      System.out.println("Begin Write file into hdfs");
+//	      //Create a path
+//	      Path hdfswritepath = new Path(newFolderPath + "/" + fileName);
+//	      //Init output stream
+//	      FSDataOutputStream outputStream=fs.create(hdfswritepath);
+//	      //Cassical output stream usage
+//	      outputStream.writeBytes(fileContent);
+//	      outputStream.close();
+//	      logger.info("End Write file into hdfs");
+
+		// Create a Java Spark Context
 		SparkConf sparkConf = new SparkConf();
 		sparkConf.setAppName("SparkKafka");
 		sparkConf.setMaster("local");
@@ -49,9 +93,13 @@ public class SparkKafkaConsumer {
 		.filter(tweet -> tweet != null)
 		.filter(tweet -> !tweet.isEmpty());
 		
+	
 		dstream.foreachRDD(rdd -> {
+			
 			if(!rdd.isEmpty()){
 				rdd.saveAsTextFile(SAVE_LOCATION);
+				System.out.println("saving rdd ...###" );
+				
 		}
 		});
 				
@@ -81,10 +129,10 @@ public class SparkKafkaConsumer {
             object.addProperty("created_at", createdAt);
             object.addProperty("text", text);
             object.addProperty("name", name);
-            object.addProperty("followers_count", String.valueOf(followersCount));
-            object.addProperty("friends_count", String.valueOf(friendsCount));
-            object.addProperty("retweet_count", String.valueOf(retweetCount));
-            object.addProperty("reply_count", String.valueOf(replyCount));
+            object.addProperty("followers_count", followersCount);
+            object.addProperty("friends_count", friendsCount);
+            object.addProperty("retweet_count", retweetCount);
+            object.addProperty("reply_count", replyCount);
             return object.toString();
         }catch(Exception e){
             return null;
